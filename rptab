@@ -1,0 +1,16 @@
+# ------------------------------------------------------------------------------
+#
+# SOURCE FILE: /etc/rptab
+#
+# DESCRIPTION: This file contains a list of RedPrairie environments installed 
+#              on this system.  It is used by the administration utilities.
+#
+# FORMAT:  <EnvironmentName>:<Login>:<Directory>:<Autostart?>:<MOCA_REGISTRY>
+#
+# EXAMPLE: prod:redprairie:/opt/redprairie/prod:Y
+#
+#
+# NOTE:    If a fifth field defining the pathname of the MOCA registry file is
+#          not defined a default value of $LESDIR/data/registry will be used.
+#
+# ------------------------------------------------------------------------------
