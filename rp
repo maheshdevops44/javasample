@@ -1,0 +1,203 @@
+#!/bin/ksh
+################################################################################
+#
+# $URL$
+# $Revision$
+# $Author$
+#
+# Description: Environment start/stop script.
+#
+# $Copyright-Start$
+#
+# Copyright (c) 2010
+# RedPrairie Corporation
+# All Rights Reserved
+#
+# This software is furnished under a corporate license for use on a
+# single computer system and can be copied (with inclusion of the
+# above copyright) only for use on such a system.
+#
+# The information in this document is subject to change without notice
+# and should not be construed as a commitment by RedPrairie Corporation.
+#
+# RedPrairie Corporation assumes no responsibility for the use of the
+# software described in this document on equipment which has not been
+# supplied or approved by RedPrairie Corporation.
+#
+# $Copyright-End$
+#
+################################################################################
+
+pidfile=${LESDIR}/data/mocaserver-${MOCA_ENVNAME}.pid
+
+#
+# The following function gets a registry value from the Services section
+# of the registry and sets a shell variable that can be referenced by
+# the caller.
+#
+
+getregvalue() {
+
+    key=$1
+
+    regvalue=`sed -e 's/[[:space:]]*\=[[:space:]]*/=/g' \
+               -e 's/[[:space:]]*$//' \
+               -e 's/^[[:space:]]*//' \
+              < $MOCA_REGISTRY \
+              | sed -n -e "/^\[[Ss][Ee][Rr][Vv][Ii][Cc][Ee]\]/,/^\s*\[/{/^[^;].*\=.*/p;}" \
+              | grep -i "^$key" \
+              | cut -f2 -d=`
+
+    regvalue=`eval echo ${regvalue}`
+}
+
+mystart() {
+
+    echo
+    echo "Starting the \"${MOCA_ENVNAME}\" environment..."
+    echo
+
+    # Make sure the pid file does not exist.
+    if [ -f $pidfile ]; then
+	echo "ERROR: Could not start environment - pid file still exists."
+	echo "       Is the environment already running?"
+	echo "       $pidfile"
+	echo
+        exit 1
+    fi
+
+    # Get the service.command registry key value.
+    getregvalue "command"
+    command=${regvalue:-mocaserver}
+
+    # Get the service.output registry key value.
+    getregvalue "output"
+    output=${regvalue:-$LESDIR/log/mocaserver.log}
+
+    echo "$command >$output 2>&1"
+    echo
+
+    # Start up the server.
+    nohup $command >$output 2>&1 &
+    if [ $? -ne 0 ]; then
+	echo "ERROR: Could not start the server."
+	echo
+        exit 1
+    fi
+
+    # Get the PID and write it to the pid file.
+    pid=$!
+    echo "$pid" >$pidfile
+}
+
+mystop() {
+
+    echo 
+    echo "Shutting down the \"${MOCA_ENVNAME}\" environment..."
+    echo 
+
+    # Make sure the pid file exists.
+    if [ ! -f $pidfile ]; then
+	echo "ERROR: Could not shutdown environment - pid file not found."
+	echo "       Is the environment actually running?"
+	echo "       $pidfile"
+	echo
+        rm -f $pidfile
+        exit 1
+    fi
+
+    # Get the PID from the pid file.
+    pid=`cat $pidfile`
+
+    # Actually kill the process. 
+    kill -15 $pid   
+    if [ $? -ne 0 ]; then
+	echo "ERROR: Could not kill process."
+	echo "       Is the environment actually running?"
+	echo
+        rm -f $pidfile
+        exit 1
+    fi
+
+    # Remove the pid file.
+    rm -f $pidfile
+    if [ $? -ne 0 ]; then
+	echo "ERROR: Could not remove pid file."
+	echo "       Please remove it manually if it still exists"
+	echo
+        exit 1
+    fi
+}
+
+mystatus() {
+
+    echo 
+    echo "Checking the status of the \"${MOCA_ENVNAME}\" environment..."
+    echo 
+
+    # Make sure the pid file exists.
+    if [ ! -f $pidfile ]; then
+	echo "The \"${MOCA_ENVNAME}\" environment is not running."
+	echo
+        exit 1
+    fi
+
+    # Get the PID from the pid file.
+    pid=`cat $pidfile`
+
+    exists=`ps -fp $pid`
+    if [ $? -ne 0 ]; then
+	echo "A pidfile exists, but the \"${MOCA_ENVNAME}\" environment is not running."
+	echo "Is the environment actually running?"
+	echo
+        exit 1
+    fi
+
+    echo "The \"${MOCA_ENVNAME}\" environment is running."
+    echo 
+}
+
+# ------------------------------------------------------------------------------
+# Unset existing product directories.
+# ------------------------------------------------------------------------------
+
+if [ -z "${LESDIR}" -o -z "${MOCADIR}" -o -z "${MOCA_ENVNAME}" ]; then
+    echo
+    echo "ERROR: Your environment is not set up correctly."
+    echo "       Have you run 'rpset' yet?"
+    echo
+    exit 1
+fi
+
+# ------------------------------------------------------------------------------
+# We still have to support legacy environment.
+# ------------------------------------------------------------------------------
+
+ver=`cat ${MOCADIR}/config/TaggedVersion | cut -f1-2 -d.`
+
+if [[ ! "$ver" > "2009.2" ]]; then
+    rp.legacy $1
+    exit $?
+fi
+
+# ------------------------------------------------------------------------------
+# Start or stop the environment given the command line argument.
+# ------------------------------------------------------------------------------
+
+case "$1" in
+    start)
+        mystart
+	;;
+    stop)
+        mystop
+	;;
+    status)
+        mystatus
+	;;
+    *)
+        echo "Usage: $0 [start | stop | status]"
+	exit 1
+	;;
+esac
+
+exit 0
